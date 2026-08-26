@@ -13,13 +13,19 @@ const execFileAsync = promisify(execFile);
 export class GitService {
     private async executeGit(args: string[]): Promise<string> {
         try {
-            const { stdout } = await execFileAsync("git", args);
+            const { stdout } = await execFileAsync("git", args, {
+                maxBuffer: 10 * 1024 * 1024,
+            });
 
             return stdout.trim();
         } catch (error) {
-            console.error("Git error:", error);
+            if (error instanceof Error) {
+                throw new Error(
+                    `Git command failed: git ${args.join(" ")}\n${error.message}`,
+                );
+            }
 
-            throw new Error(`Git command failed: ${args.join(" ")}`);
+            throw error;
         }
     }
 

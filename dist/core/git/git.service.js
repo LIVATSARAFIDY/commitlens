@@ -5,12 +5,15 @@ export class GitService {
     async executeGit(args) {
         try {
             const { stdout } = await execFileAsync("git", args, {
-                encoding: "utf8",
+                maxBuffer: 10 * 1024 * 1024,
             });
             return stdout.trim();
         }
         catch (error) {
-            throw new Error(`Git command failed: ${args.join(" ")}`);
+            if (error instanceof Error) {
+                throw new Error(`Git command failed: git ${args.join(" ")}\n${error.message}`);
+            }
+            throw error;
         }
     }
     async isRepository() {

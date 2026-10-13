@@ -1,6 +1,9 @@
+
 import type { Command } from "commander";
 
 import { GitService } from "../core/git/git.service.js";
+import { CommitAnalyzer } from "../core/analyzer/commit.analyzer.js";
+import { CommitMessageGenerator } from "../core/generator/commit-message.generator.js";
 
 export function registerAnalyzeCommand(program: Command): void {
     program
@@ -8,6 +11,8 @@ export function registerAnalyzeCommand(program: Command): void {
         .description("Analyze staged Git changes")
         .action(async () => {
             const git = new GitService();
+            const analyzer = new CommitAnalyzer();
+            const messageGenerator = new CommitMessageGenerator();
 
             const isRepository = await git.isRepository();
 
@@ -41,6 +46,43 @@ export function registerAnalyzeCommand(program: Command): void {
 
             console.log(`  + ${changes.stats.additions} additions`);
             console.log(`  - ${changes.stats.deletions} deletions`);
+
+            const analysis = analyzer.analyze(changes);
+
+            console.log("\nAnalysis:\n");
+
+            console.log(`  Type        ${analysis.type.type}`);
+            console.log(`  Confidence  ${analysis.type.confidence}%`);
+            console.log(`  Scope       ${analysis.scope.scope ?? "null"}`);
+            console.log(`  Confidence  ${analysis.scope.confidence}%`);
+
+            if (analysis.type.reasons.length > 0) {
+                console.log("\nReasons:\n");
+
+                for (const reason of analysis.type.reasons) {
+                    console.log(`  • ${reason}`);
+                }
+            }
+            if (analysis.changes.length > 0) {
+                console.log("\nChange signals:\n");
+
+                for (const change of analysis.changes) {
+                    console.log(
+                        `  • [${change.type}] ${change.reason}`,
+                    );
+                }
+            }
+
+            const suggestedCommit = messageGenerator.generate(analysis);
+
+            console.log("\nSuggested commit:\n");
+
+            if (suggestedCommit) {
+                console.log(`  ${suggestedCommit}`);
+            } else {
+                console.log("  No reliable commit message suggestion.");
+            }
+
             console.log();
         });
 }

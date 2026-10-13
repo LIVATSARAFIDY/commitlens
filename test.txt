@@ -1,1 +1,193 @@
-Fichier test
+1. Présentation Générale
+
+CommitLens est un outil en ligne de commande (CLI) conçu pour analyser intelligemment les modifications stagées (staged changes) d'un dépôt Git. Son objectif principal est d'assister le développeur dans la rédaction de messages de commit conformes aux Conventional Commits en suggérant le type de commit le plus approprié (ex: feat, fix, chore, refactor) basé sur une analyse technique des changements.
+
+2. Architecture Technique
+
+L'application suit une architecture modulaire et découplée, organisée en trois couches principales :
+
+A. Couche Interface (CLI)
+
+- Technologie : commander (Node.js).
+- Rôle : Gère les commandes utilisateur, l'argumentation et l'affichage des résultats dans le terminal.
+- Point d'entrée : src/index.ts qui enregistre les commandes disponibles (actuellement la commande analyze).
+
+B. Couche Core (Logique Métier)
+
+C'est le cœur de l'application, divisé en deux services majeurs :
+
+1. GitService (src/core/git/)
+
+- Rôle : Interface d'abstraction avec l'outil Git installé sur le système.
+- Fonctionnement : Utilise child_process.execFile pour exécuter des commandes Git (diff --cached, rev-parse, etc.) et transforme la sortie brute (texte) en objets TypeScript typés (GitStagedChanges).
+
+2. CommitAnalyzer (src/core/analyzer/)
+
+C'est le moteur d'inférence. Il orchestre plusieurs détecteurs spécialisés pour aboutir à une conclusion :
+- TypeDetector : Le cerveau qui calcule un score pour chaque type de commit possible.
+- ScopeDetector : Analyse les fichiers modifiés pour identifier le périmètre (scope) du changement.
+- FileClassifier : Catégorise les fichiers (ex: un fichier .test.ts $\rightarrow$ catégorie test, un .md $\rightarrow$ documentation).
+- ChangeDetector : Analyse le contenu du diff pour identifier des "signaux" (ex: ajout d'une nouvelle classe $\rightarrow$ signal new_class).
+
+C. Couche Support & Types
+
+- Types : Utilisation intensive de TypeScript pour garantir la cohérence des données entre le service Git et l'analyseur.
+- Règles : Dossier rules/ pour isoler les critères de classification.
+
+---
+
+3. Stratégie de Raisonnement Fonctionnel
+
+Le point fort de CommitLens est sa stratégie de scoring probabiliste. Au lieu d'utiliser des règles rigides (si X alors Y), l'application utilise un système de pondération :
+
+Processus de décision du TypeDetector :
+
+1. Détection Exclusive (Raccourcis) :
+   L'analyseur vérifie d'abord si tous les fichiers appartiennent à une catégorie unique.
+   - Exemple : Si 100% des fichiers modifiés sont dans tests/, le type test est retourné immédiatement avec une confiance de 95%.
+2. Analyse Multi-Critères (Scoring) :
+   Si aucun cas exclusif n'est trouvé, l'application initialise un tableau de scores pour tous les types (feat, fix, perf, etc.) et additionne des points selon trois axes :
+   - La Nature des Fichiers : Un fichier source ajouté $\rightarrow$ +15 pts pour feat. Un fichier de config $\rightarrow$ +10 pts pour chore.
+   - L'Analyse du Diff (Mots-clés) : Recherche de termes comme "optimize" $\rightarrow$ +15 pts pour perf, ou "revert" $\rightarrow$ +30 pts pour revert.
+   - Les Signaux Structurels : Détection de patterns de code (via ChangeDetector). L'ajout d'un endpoint API $\rightarrow$ points pour feat. L'amélioration de la gestion d'erreurs $\rightarrow$ points pour fix.
+3. Calcul de la Confiance :
+   L'application ne se contente pas de donner le type avec le score le plus élevé. Elle calcule un indice de confiance basé sur l'écart entre le premier et le deuxième meilleur score :
+   $$\text{Confiance} = \frac{\text{Score Max}}{\text{Score Max} + \text{Score Second}}$$
+   Cela permet d'indiquer à l'utilisateur si l'analyse est tranchée ou ambiguë.
+
+---
+
+4. Synthèse du flux de données
+
+Utilisateur (analyze) $\rightarrow$ GitService (extract diff) $\rightarrow$ FileClassifier (categorize) $\rightarrow$ TypeDetector (scoring) $\rightarrow$ Résultat (Type + Confiance + Raisons).
+
+Points forts de l'approche :
+- Justification : L'application conserve la liste des "raisons" ayant mené au score, rendant l'outil transparent.
+- Extensibilité : Ajouter un nouveau type de commit ou une nouvelle règle de détection ne nécessite pas de modifier la structure globale, seulement d'ajouter un signal ou un score.
+
+📂 Schéma de l'arborescence
+
+commitlens/
+├── 📁 src/                     # Code source TypeScript
+│   ├── 📁 commands/            # Gestion des commandes CLI
+│   │   └── analyze.ts          # Logique de la commande 'analyze'
+│   ├── 📁 core/                # Logique métier (Cœur du projet)
+│   │   ├── 📁 analyzer/         # Moteur d'analyse des commits
+│   │   │   ├── analyzer.types.ts   # Interfaces de données de l'analyse
+│   │   │   ├── commit.analyzer.ts  # Orchestrateur de l'analyse
+│   │   │   ├── file-classifier.ts # Classification des fichiers (source, test, doc...)
+│   │   │   ├── 📁 detectors/       # Détecteurs de patterns spécifiques
+│   │   │   │   ├── change.detector.ts # Analyse le contenu du diff (signaux)
+│   │   │   │   ├── scope.detector.ts # Détermine le périmètre (scope)
+│   │   │   │   └── type.detector.ts  # Calcule le type (feat, fix...) via scoring
+│   │   │   └── 📁 rules/           # Règles de classification
+│   │   │       ├── diff.rules.ts    # Règles basées sur le contenu du diff
+│   │   │       ├── file.rules.ts   # Règles basées sur les types de fichiers
+│   │   │       └── path.rules.ts    # Règles basées sur les chemins (paths)
+│   │   └── 📁 git/              # Interface avec Git
+│   │       ├── git.service.ts       # Exécute les commandes Git système
+│   │       └── git.types.ts        # Types pour les données Git (Diff, Stats...)
+│   ├── 📁 dev/                 # Scripts de test et debug (développement)
+│   │   ├── test-classifier.ts      # Test du classifieur de fichiers
+│   │   ├── test-commit-analyzer.ts # Test global de l'analyseur
+│   │   └── ... (autres tests unitaires)
+│   └── index.ts                # Point d'entrée de l'application
+├── 📁 dist/                     # Code compilé en JavaScript (généré par tsc)
+├── package.json                # Dépendances et scripts du projet
+├── tsconfig.json               # Configuration du compilateur TypeScript
+└── README.md                   # Documentation du projet
+
+---
+
+📄 Description détaillée des fichiers
+
+🚀 Point d'entrée & CLI
+
+- src/index.ts : Le cerveau de l'interface. Il initialise commander, configure le nom et la version de l'app, et charge les commandes disponibles.
+- src/commands/analyze.ts : Définit la commande analyze. Elle fait le lien entre l'utilisateur et le GitService pour afficher les fichiers modifiés et les statistiques de base (ajouts/suppressions).
+
+⚙️ Core : Interface Git (src/core/git/)
+
+- git.service.ts : Un wrapper autour de la commande git du système. Il contient des méthodes comme getStagedChanges() qui récupèrent le diff et les fichiers indexés.
+- git.types.ts : Définit les structures de données pour Git (ex: GitFileChange avec le chemin et le statut added, modified, etc.).
+
+🧠 Core : Analyseur (src/core/analyzer/)
+
+- commit.analyzer.ts : C'est l'orchestrateur. Il appelle le TypeDetector et le ScopeDetector pour produire un rapport final (CommitAnalysis).
+- analyzer.types.ts : Définit ce qu'est une analyse (le type suggéré, le niveau de confiance et les raisons).
+- file-classifier.ts : Analyse le chemin d'un fichier pour savoir s'il s'agit de code source, d'un test, de documentation ou de configuration.
+
+Les Détecteurs (src/core/analyzer/detectors/) :
+- type.detector.ts : Le fichier le plus complexe. Il implémente le système de scoring. Il accumule des points pour chaque type de commit en fonction des fichiers et des signaux détectés.
+- change.detector.ts : Analyse le texte du diff pour trouver des "signaux" (ex: "Ajout d'une fonction" $\rightarrow$ signal new_function).
+- scope.detector.ts : Tente d'identifier quelle partie du projet est touchée pour suggérer un scope (ex: auth, ui, api).
+
+Les Règles (src/core/analyzer/rules/) :
+- path.rules.ts / file.rules.ts / diff.rules.ts : Contiennent les listes de mots-clés ou d'extensions de fichiers utilisés par les détecteurs pour prendre des décisions.
+
+🛠️ Développement & Config
+
+- src/dev/*.ts : Petits scripts isolés qui permettent de tester un composant précis (ex: tester si le TypeDetector suggère bien fix quand on modifie un fichier de validation) sans avoir à lancer tout le flux Git.
+- package.json : Gère les dépendances (commander, tsx, typescript) et définit les scripts de lancement (npm run dev).
+- tsconfig.json : Configure TypeScript pour transformer le code .ts en .js compatible avec Node.js (module ES).
+
+Parfait. ✅ CommitAnalyzer fonctionne correctement.
+Les résultats montrent exactement ce qu'on voulait :
+- Feature in auth → feat + auth
+- Feature in API → feat + api
+- Multiple scopes → feat + scope null, plutôt que choisir arbitrairement auth ou api
+On peut donc considérer CommitAnalyzer V1 terminé.
+Maintenant, on passe à l'intégration réelle
+Jusqu'ici, on testait les composants indépendamment :
+GitService             ✅
+FileClassifier         ✅
+ChangeDetector         ✅
+TypeDetector           ✅
+ScopeDetector          ✅
+CommitAnalyzer         ✅
+
+quand je fait:
+commitlens analyze
+
+analyze.ts utilise encore directement GitService et affiche seulement les fichiers/statistiques.
+
+La prochaine étape est donc de modifier :src/commands/analyze.ts
+pour avoir
+GitService
+    ↓
+CommitAnalyzer
+    ↓
+CommitAnalysis
+    ↓
+affichage CLI
+
+Le résultat devrait commencer à ressembler à :
+CommitLens 🔍
+
+✓ Git repository detected
+✓ 2 staged file(s) detected
+
+Files:
+
+  A src/auth/register.ts
+  M src/auth/user.ts
+
+Changes:
+
+  + 20 additions
+  - 3 deletions
+
+Analysis:
+
+  Type       feat
+  Confidence 97%
+  Scope      auth
+  Confidence 100%
+
+Reasons:
+
+  • New source file added: src/auth/register.ts
+  • 1 new function(s) detected
+
+  Et c'est une étape importante : à partir de là, on auras une vraie V1 utilisable de CommitLens.
+Ensuite seulement,  faire la génération du Conventional Commit, puis de brancher l'IA sur cette analyse structurée. C'est ce qui nous rapprochera de la version portfolio que je veux.

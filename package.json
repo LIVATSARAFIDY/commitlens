@@ -5,6 +5,14 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx src/index.ts",
+    "dev:classifier": "tsx src/dev/test-classifier.ts",
+    "dev:type-detector": "tsx src/dev/test-type-detector.ts",
+    "dev:change-detector": "tsx src/dev/test-change-detector.ts",
+    "dev:scope-detector": "tsx src/dev/test-scope-detector.ts",
+    "dev:commit-analyzer": "tsx src/dev/test-commit-analyzer.ts",
+    "dev:commit-message-generator": "tsx src/dev/test-commit-message-generator.ts",
+    "dev:description-generator": "tsx src/dev/test-description-generator.ts",
+    "dev:integration": "tsx src/dev/test-commit-integration.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },

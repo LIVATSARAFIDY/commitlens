@@ -14,4 +14,3 @@ program
 registerAnalyzeCommand(program);
 
 program.parseAsync();
-

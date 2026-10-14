@@ -191,3 +191,14 @@ Reasons:
 
   Et c'est une étape importante : à partir de là, on auras une vraie V1 utilisable de CommitLens.
 Ensuite seulement,  faire la génération du Conventional Commit, puis de brancher l'IA sur cette analyse structurée. C'est ce qui nous rapprochera de la version portfolio que je veux.
+
+
+
+
+7de708bc622f4919bf6f494d1baeb1c1.i3sfee7Mt2ZP0W4RSoukmXQ7
+
+469cd8c1eaf442498f39beedc5488d8f.KCAxZhaHsnbCaMTlMggWRXGQ thomas.softimad
+
+
+
+curl https://ollama.com/api/chat -H "Authorization: Bearer $OLLAMA_API_KEY" -H "Content-Type: application/json" -d '{"model": "gemma4:31b","messages": [{ "role": "user", "content": "Say hello in one sentence."}],"stream": false}'

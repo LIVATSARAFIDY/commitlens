@@ -8,6 +8,7 @@ export type SignalPriority =
 export type ChangeSignalType =
     | "new_function"
     | "new_class"
+    | "new_method"
     | "error_handling"
     | "validation"
     | "new_endpoint"
@@ -32,6 +33,7 @@ export class ChangeDetector {
         const signals: ChangeSignal[] = [];
 
         this.detectNewFunctions(addedLines, signals);
+        this.detectNewMethods(addedLines, signals);
         this.detectNewClasses(addedLines, signals);
         this.detectErrorHandling(addedLines, signals);
         this.detectValidation(addedLines, signals);
@@ -44,6 +46,7 @@ export class ChangeDetector {
             .map((signal) => {
                 if (
                     signal.type !== "new_function" &&
+                    signal.type !== "new_method" &&
                     signal.type !== "removed_function"
                 ) {
                     return signal;
@@ -63,7 +66,9 @@ export class ChangeDetector {
                     reason:
                         signal.type === "new_function"
                             ? `${subjects.length} new function(s) detected`
-                            : `${subjects.length} function(s) removed`,
+                            : signal.type === "new_method"
+                                ? `${subjects.length} new method(s) detected`
+                                : `${subjects.length} function(s) removed`,
                 };
             })
             .filter((signal) => signal !== null);
@@ -78,10 +83,7 @@ export class ChangeDetector {
             /^\+\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\(/gm;
 
         const arrowFunctionPattern =
-            /^\+\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/gm;
-
-        const methodPattern =
-            /^\+\s*(?:(?:public|private|protected|static|async|override)\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/gm;
+            /^\+\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|\w+)\s*=>/gm;
 
         const subjects: string[] = [];
 
@@ -101,6 +103,26 @@ export class ChangeDetector {
             }
         }
 
+        if (subjects.length === 0) {
+            return;
+        }
+
+        signals.push({
+            type: "new_function",
+            score: 15,
+            priority: "primary",
+            reason: `${subjects.length} new function(s) detected`,
+            subjects,
+        });
+    }
+
+    private detectNewMethods(
+        diff: string,
+        signals: ChangeSignal[],
+    ): void {
+        const methodPattern =
+            /^\+\s*(?:(?:public|private|protected|static|async|override)\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/gm;
+
         const excludedNames = new Set([
             "if",
             "for",
@@ -108,7 +130,10 @@ export class ChangeDetector {
             "switch",
             "catch",
             "with",
+            "constructor",
         ]);
+
+        const subjects: string[] = [];
 
         for (const match of diff.matchAll(methodPattern)) {
             const name = match[1];
@@ -123,13 +148,14 @@ export class ChangeDetector {
         }
 
         signals.push({
-            type: "new_function",
+            type: "new_method",
             score: 15,
             priority: "primary",
-            reason: `${subjects.length} new function(s) detected`,
-            subjects: subjects,
+            reason: `${subjects.length} new method(s) detected`,
+            subjects,
         });
     }
+
 
     private detectNewClasses(
         diff: string,
@@ -193,11 +219,12 @@ export class ChangeDetector {
         signals: ChangeSignal[],
     ): void {
         const validationPatterns = [
-            /^\s*.*\bif\s*\(.*!\w+/i,
-            /^\s*.*\bvalidate\w*\s*\(/i,
-            /^\s*.*\bvalidation\b/i,
-            /^\s*.*\brequired\b/i,
+            /\bif\s*\([^)]*!\s*\w+/i,
+            /\bvalidate(?:\s*\(|\s+)\w*/i,
+            /\bvalidation\b/i,
+            /\brequired\b/i,
         ];
+
 
         const addedCodeLines = diff
             .split("\n")

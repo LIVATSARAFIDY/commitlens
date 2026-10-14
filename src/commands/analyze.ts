@@ -4,6 +4,7 @@ import type { Command } from "commander";
 import { GitService } from "../core/git/git.service.js";
 import { CommitAnalyzer } from "../core/analyzer/commit.analyzer.js";
 import { CommitMessageGenerator } from "../core/generator/commit-message.generator.js";
+import { OllamaCloudClient } from "../ai/ollama-cloud.client.js";
 
 export function registerAnalyzeCommand(program: Command): void {
     program
@@ -73,9 +74,26 @@ export function registerAnalyzeCommand(program: Command): void {
                 }
             }
 
-            const suggestedCommit = messageGenerator.generate(analysis);
 
-            console.log("\nSuggested commit:\n");
+            const ollama = new OllamaCloudClient();
+
+            let suggestedCommit: string | null = null;
+            let suggestionSource = "Ollama Cloud";
+
+            try {
+                suggestedCommit = await ollama.suggestCommitMessage(changes.diff);
+            } catch (error) {
+                console.warn("\nAI unavailable. Using deterministic fallback.");
+
+                if (error instanceof Error) {
+                    console.warn(`  Reason: ${error.message}`);
+                }
+
+                suggestedCommit = messageGenerator.generate(analysis);
+                suggestionSource = "deterministic fallback";
+            }
+
+            console.log(`\nSuggested commit (${suggestionSource}):\n`);
 
             if (suggestedCommit) {
                 console.log(`  ${suggestedCommit}`);
@@ -84,6 +102,7 @@ export function registerAnalyzeCommand(program: Command): void {
             }
 
             console.log();
+
         });
 }
 

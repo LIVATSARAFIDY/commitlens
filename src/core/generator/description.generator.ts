@@ -36,6 +36,13 @@ const DESCRIPTION_RULES: Partial<
                 : "add function",
     },
 
+    new_method: {
+        generate: (subjects) =>
+            subjects && subjects.length > 0
+                ? `add ${formatSubjects(subjects)} method${subjects.length > 1 ? "s" : ""}`
+                : "add method",
+    },
+
     error_handling: {
         generate: () => "improve error handling",
     },
@@ -123,9 +130,20 @@ function selectPrimarySignal(
             currentPriority === bestPriority &&
             signal.score > bestSignal.score;
 
-        if (hasHigherPriority || hasHigherScore) {
+        const prefersClassOverMethod =
+            currentPriority === bestPriority &&
+            signal.score === bestSignal.score &&
+            signal.type === "new_class" &&
+            bestSignal.type === "new_method";
+
+        if (
+            hasHigherPriority ||
+            hasHigherScore ||
+            prefersClassOverMethod
+        ) {
             bestSignal = signal;
         }
+
     }
 
     return bestSignal;

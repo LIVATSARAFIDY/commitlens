@@ -292,7 +292,7 @@ const regressionCases = [
 +    }
  }
 `,
-        expected: ["new_function"],
+        expected: ["new_method"],
     },
     {
         name: "Remove an existing class method",
@@ -318,6 +318,24 @@ const regressionCases = [
 `,
         expected: [],
     },
+    {
+        name: "Add a class with constructor and methods",
+        diff: `
++export class ClassTextWithMethod {
++    constructor() { }
++
++    public methodPublic() {
++        this.method1();
++    }
++
++    private method1() {
++        return "method1";
++    }
++}
+`,
+        expected: ["new_class", "new_method"],
+    },
+
 
 ];
 
@@ -332,3 +350,100 @@ for (const testCase of regressionCases) {
 
     console.log(`✓ ${testCase.name}`);
 }
+
+const classMethodsDiff = `
++export class ClassTextWithMethod {
++    constructor() { }
++
++    public methodPublic() {
++        this.method1();
++    }
++
++    private method1() {
++        return "method1";
++    }
++}
+`;
+
+const classMethodSignals = detector.detect(classMethodsDiff);
+
+const methodSignal = classMethodSignals.find(
+    (signal) => signal.type === "new_method",
+);
+
+const actualMethods = [...(methodSignal?.subjects ?? [])].sort();
+const expectedMethods = ["method1", "methodPublic"].sort();
+
+if (JSON.stringify(actualMethods) !== JSON.stringify(expectedMethods)) {
+    throw new Error(
+        `Expected methods: ${expectedMethods.join(", ")}\n` +
+        `Received methods: ${actualMethods.join(", ") || "(none)"}`,
+    );
+}
+
+console.log("✓ Detect exact class methods");
+
+const ordinaryFunctionDiff = `
++export function createUser() {
++    return {
++        name: "Alice",
++    };
++}
+`;
+
+const ordinaryFunctionSignals = detector.detect(ordinaryFunctionDiff);
+
+const ordinaryFunctionTypes = ordinaryFunctionSignals
+    .map((signal) => signal.type)
+    .sort();
+
+const expectedOrdinaryFunctionTypes = ["new_function"];
+
+if (
+    JSON.stringify(ordinaryFunctionTypes) !==
+    JSON.stringify(expectedOrdinaryFunctionTypes)
+) {
+    throw new Error(
+        `Expected signals: ${expectedOrdinaryFunctionTypes.join(", ")}\n` +
+        `Received signals: ${ordinaryFunctionTypes.join(", ") || "(none)"}`,
+    );
+}
+
+console.log("✓ Ordinary function is not detected as a method");
+
+const nestedFunctionDiff = `
++export function processUser() {
++    function validateUser() {
++        return true;
++    }
++
++    return validateUser();
++}
+`;
+
+const nestedFunctionSignals = detector.detect(nestedFunctionDiff);
+console.log(
+    "Nested function signals:",
+    nestedFunctionSignals.map((signal) => ({
+        type: signal.type,
+        subjects: signal.subjects,
+    })),
+);
+const nestedFunctionTypes = nestedFunctionSignals
+    .map((signal) => signal.type)
+    .sort();
+
+const expectedNestedFunctionTypes = ["new_function"];
+
+if (
+    JSON.stringify(nestedFunctionTypes) !==
+    JSON.stringify(expectedNestedFunctionTypes)
+) {
+    throw new Error(
+        `Expected signals: ${expectedNestedFunctionTypes.join(", ")}\n` +
+        `Received signals: ${nestedFunctionTypes.join(", ") || "(none)"}`,
+    );
+}
+
+console.log("✓ Nested function is not detected as a method");
+

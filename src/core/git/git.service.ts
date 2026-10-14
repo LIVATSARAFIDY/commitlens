@@ -150,4 +150,17 @@ export class GitService {
                 return "unknown";
         }
     }
+
+    async createCommit(message: string): Promise<string> {
+        if (!message.trim()) {
+            throw new Error("Commit message cannot be empty.");
+        }
+
+        return this.executeGit([
+            "commit",
+            "-m",
+            message.trim(),
+        ]);
+    }
+
 }

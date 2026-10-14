@@ -5,6 +5,8 @@ import { GitService } from "../core/git/git.service.js";
 import { CommitAnalyzer } from "../core/analyzer/commit.analyzer.js";
 import { CommitMessageGenerator } from "../core/generator/commit-message.generator.js";
 import { OllamaCloudClient } from "../ai/ollama-cloud.client.js";
+import { createInterface } from "node:readline/promises";
+import { stdin, stdout } from "node:process";
 
 export function registerAnalyzeCommand(program: Command): void {
     program
@@ -100,6 +102,62 @@ export function registerAnalyzeCommand(program: Command): void {
             } else {
                 console.log("  No reliable commit message suggestion.");
             }
+
+
+            if (!suggestedCommit) {
+                console.log("No commit created.");
+                return;
+            }
+
+            const rl = createInterface({
+                input: stdin,
+                output: stdout,
+            });
+
+            try {
+                console.log("\nWhat would you like to do?");
+                console.log("  [Enter] Validate and commit");
+                console.log("  [m]     Modify the message");
+                console.log("  [a]     Abort");
+
+                const choice = (
+                    await rl.question("\nYour choice: ")
+                ).trim().toLowerCase();
+
+                let finalMessage = suggestedCommit;
+
+                if (choice === "m") {
+                    finalMessage = await rl.question(
+                        "\nNew commit message: ",
+                    );
+
+                    finalMessage = finalMessage.trim();
+
+                    if (!finalMessage) {
+                        console.log("Empty message. No commit created.");
+                        return;
+                    }
+                } else if (choice !== "") {
+                    console.log("Commit cancelled.");
+                    return;
+                }
+
+                const result = await git.createCommit(finalMessage);
+
+                console.log("\nCommit created successfully.");
+                if (result) {
+                    console.log(result);
+                }
+            } catch (error) {
+                console.error(
+                    "\nFailed to create commit:",
+                    error instanceof Error ? error.message : error,
+                );
+                process.exitCode = 1;
+            } finally {
+                rl.close();
+            }
+
 
             console.log();
 
